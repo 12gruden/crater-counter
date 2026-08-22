@@ -20,20 +20,17 @@ else:
 
 if img_file is not None:
   try:
-    # Открываем фото в максимальном качестве без сильного сжатия
     img = Image.open(img_file)
     img.save("temp.jpg")
 
-    # Показываем превью картинки
     st.image(img, caption="Zpracovávaná fotografie", use_container_width=True)
 
     with st.spinner("Počítám přepravky..."):
-      # Кодируем картинку в base64
       with open("temp.jpg", "rb") as image_file:
         encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
 
-      # Ультра-чувствительные настройки: confidence=5, overlap=80
-      url = "https://detect.roboflow.com/cbl_crates/4?api_key=PP79RD363i1TjHyPScet&confidence=5&overlap=80"
+      # Максимальная чувствительность: confidence=1, overlap=90
+      url = "https://detect.roboflow.com/cbl_crates/4?api_key=PP79RD363i1TjHyPScet&confidence=1&overlap=90"
 
       headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
