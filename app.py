@@ -33,22 +33,20 @@ if img_file is not None:
       with open("temp.jpg", "rb") as image_file:
         encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
 
-      # Правильный адрес модели + минимальный порог уверенности 10% для черных ящиков
-      url = "https://detect.roboflow.com/cbl_crates/4?api_key=PP79RD363i1TjHyPScet&confidence=10"
+      # Добавили overlap=10, чтобы модель видела все соприкасающиеся ящики
+      url = "https://detect.roboflow.com/cbl_crates/4?api_key=PP79RD363i1TjHyPScet&confidence=10&overlap=10"
 
       headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
-      # Отправляем запрос
       response = requests.post(url, data=encoded_string, headers=headers)
       result = response.json()
 
-      # Извлекаем предсказания
       boxes = result.get("predictions", [])
 
       if len(boxes) == 0:
         st.warning(
             "📦 Přepravky nebyly nalezeny. Zkuste vyfotit z bližší vzdálenosti"
-            " za lepšího světla."
+            " nebo zkontrolujte osvětlení."
         )
       else:
         classes = [
