@@ -1,51 +1,65 @@
-﻿
-
-import streamlit as st
-from roboflow import Roboflow
+﻿import streamlit as st
+from inference_sdk import InferenceHTTPClient
 from collections import Counter
 from PIL import Image
 
-# Nastavení stránky
+# Настройка страницы
 st.set_page_config(page_title="Skener přepravek", layout="centered")
 st.title("📦 Skener přepravek")
 
-# Načtení modelu z Roboflow
+# Инициализация клиента Roboflow Workflow
 @st.cache_resource
-def load_model():
-    rf = Roboflow(api_key="PP79RD363i1TjHyPScet")
-    project = rf.workspace("evgeniya-kurbatova").project("cbl_crates")
-    return project.version(4).model
+def get_workflow_client():
+    return InferenceHTTPClient(
+        api_url="https://serverless.roboflow.com",
+        api_key="PP79RD363i1TjHyPScet"
+    )
 
 try:
-    model = load_model()
-    if model is None:
-        st.error("⚠️ Model vrátil hodnotu None. Zkontrolujte, zda je verze 4 publikovaná (Deployed) v Roboflow.")
+    client = get_workflow_client()
 except Exception as e:
-    st.error(f"⚠️ Chyba načtení modelu: {repr(e)}")
-    model = None
+    st.error(f"⚠️ Chyba připojení k API: {repr(e)}")
+    client = None
 
+# Кнопка для камеры телефона/ноута
+img_file = st.camera_input("Vyfotte paletu s přepravkami")
 
-# Tlačítko pro fotoaparát
-img_file = st.camera_input("Vyfoťte paletu s přepravkami")
-
-if img_file:
+if img_file and client:
+    # Сохраняем фото
     img = Image.open(img_file)
     img.save("temp.jpg")
 
     with st.spinner("Počítám přepravky..."):
         try:
-            # Получаем результат от нейросети
-            result = model.predict("temp.jpg", confidence=40, overlap=25)
+            # Запуск воркфлоу через Inference SDK
+            result = client.run_workflow(
+                workspace_name="evgeniya-kurbatova",
+                workflow_id="cbl_crates-vcblcrates-4-yolo11n-t1-logic",
+                images={
+                    "image": "temp.jpg"
+                }
+            )
             
-            # Безопасное извлечение данных
-            data = result.json() if hasattr(result, "json") else result
-            boxes = data.get("predictions", []) if isinstance(data, dict) else []
-            
+            # Универсальный поиск предсказаний в ответе воркфлоу
+            boxes = []
+            if isinstance(result, list) and len(result) > 0:
+                for item in result:
+                    if isinstance(item, dict):
+                        for k, v in item.items():
+                            if isinstance(v, list) and len(v) > 0 and isinstance(v[0], dict) and "class" in v[0]:
+                                boxes = v
+                                break
+                            elif isinstance(v, dict) and "predictions" in v:
+                                boxes = v["predictions"]
+                                break
+            elif isinstance(result, dict):
+                boxes = result.get("predictions", [])
+
+            # Вывод результатов на чешском языке
             if len(boxes) == 0:
                 st.warning("📦 Přepravky nebyly nalezeny. Zkuste vyfotit z bližší vzdálenosti.")
             else:
-                # Подсчет ящиков по типам
-                classes = [p["class"] for p in boxes if "class" in p]
+                classes = [p.get("class", "unknown") for p in boxes if isinstance(p, dict)]
                 counts = Counter(classes)
                 
                 st.subheader("Výsledek:")
@@ -54,4 +68,4 @@ if img_file:
                 st.info(f"**Celkem nalezeno**: {len(boxes)} ks")
                 
         except Exception as e:
-            st.error(f"⚠️ Detail chyby: {repr(e)}")
+            st.error(f"⚠️ Došlo k chybě při zpracování: {repr(e)}")
