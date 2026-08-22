@@ -19,7 +19,6 @@ else:
   img_file = st.file_uploader("Nahrát obrázek", type=["jpg", "jpeg", "png"])
 
 
-# Универсальная функция для поиска предсказаний в любом ответе Workflow
 def extract_predictions(data):
   preds = []
   if isinstance(data, dict):
@@ -47,7 +46,6 @@ if img_file is not None:
     st.image(img, caption="Zpracovávaná fotografie", use_container_width=True)
 
     with st.spinner("Počítám přepravky..."):
-      # Кодируем картинку в base64
       with open("temp.jpg", "rb") as image_file:
         encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
 
@@ -63,7 +61,9 @@ if img_file is not None:
       )
       result = response.json()
 
-      # Извлекаем все найденные объекты
+      # ВЫВОДИМ ОТВЕТ ОТ СЕРВЕРА ДЛЯ АНАЛИЗА
+      st.write("🔍 Сырой ответ от Roboflow:", result)
+
       valid_boxes = extract_predictions(result)
 
       if len(valid_boxes) == 0:
