@@ -12,15 +12,18 @@ st.title("📦 Skener přepravek")
 # Načtení modelu z Roboflow
 @st.cache_resource
 def load_model():
-    
-    rf = Roboflow(api_key="PP79RD363i1TjHyPScet") 
+    rf = Roboflow(api_key="PP79RD363i1TjHyPScet")
     project = rf.workspace("evgeniya-kurbatova").project("cbl_crates")
     return project.version(4).model
 
 try:
     model = load_model()
-except Exception:
-    st.error("Chyba připojení k modelu. Zkontrolujte API Key.")
+    if model is None:
+        st.error("⚠️ Model vrátil hodnotu None. Zkontrolujte, zda je verze 4 publikovaná (Deployed) v Roboflow.")
+except Exception as e:
+    st.error(f"⚠️ Chyba načtení modelu: {repr(e)}")
+    model = None
+
 
 # Tlačítko pro fotoaparát
 img_file = st.camera_input("Vyfoťte paletu s přepravkami")
