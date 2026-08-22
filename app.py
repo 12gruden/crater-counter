@@ -20,8 +20,14 @@ except Exception as e:
     st.error(f"⚠️ Chyba připojení k modelu: {repr(e)}")
     model = None
 
-# Кнопка для камеры
-img_file = st.camera_input("Vyfotte paletu s přepravkami")
+# Выбор: камера или загрузка файла из галереи
+upload_option = st.radio("Vyberte způsob:", ["Vyfotit fotoaparatem", "Nahrát fotку ze zařízení"])
+
+img_file = None
+if upload_option == "Vyfotit fotoaparatem":
+    img_file = st.camera_input("Vyfotte paletu s přepravkami")
+else:
+    img_file = st.file_uploader("Nahrát obrázek", type=["jpg", "jpeg", "png"])
 
 if img_file and model:
     # Сохраняем фото
