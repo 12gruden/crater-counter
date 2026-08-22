@@ -51,4 +51,4 @@ if img_file:
                 st.info(f"**Celkem nalezeno**: {len(boxes)} ks")
                 
         except Exception as e:
-            st.error("⚠️ Došlo k chybě při zpracování. Zkuste to prosím znovu.")
+            st.error(f"⚠️ Detail chyby: {repr(e)}")
