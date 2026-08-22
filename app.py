@@ -1,6 +1,6 @@
 import base64
 from collections import Counter
-from PIL import Image
+from PIL import Image, ImageDraw
 import requests
 import streamlit as st
 
@@ -23,13 +23,11 @@ if img_file is not None:
     img = Image.open(img_file)
     img.save("temp.jpg")
 
-    st.image(img, caption="Zpracovávaná fotografie", use_container_width=True)
-
     with st.spinner("Počítám přepravky..."):
       with open("temp.jpg", "rb") as image_file:
         encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
 
-      # Универсальные рабочие параметры для любых фотографий
+      # Универсальные рабочие параметры
       url = "https://detect.roboflow.com/cbl_crates/4?api_key=PP79RD363i1TjHyPScet&confidence=40&overlap=30"
       headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
@@ -39,12 +37,43 @@ if img_file is not None:
       boxes = result.get("predictions", [])
 
       if len(boxes) == 0:
+        st.image(
+            img, caption="Zpracovávaná fotografie", use_container_width=True
+        )
         st.warning(
             "📦 Přepravky nebyly nalezeny. Zkuste vyfotit z bližší vzdálenosti"
             " za lepšího světla."
         )
       else:
-        # Честный вывод классов, которые определила модель
+        # Создаем копию картинки для отрисовки рамок
+        draw_img = img.copy()
+        draw = ImageDraw.Draw(draw_img)
+
+        for box in boxes:
+          x = box["x"]
+          y = box["y"]
+          w = box["width"]
+          h = box["height"]
+          label = box["class"]
+          conf = box.get("confidence", 0)
+
+          # Переводим координаты центра в углы рамки
+          x0 = x - w / 2
+          y0 = y - h / 2
+          x1 = x + w / 2
+          y1 = y + h / 2
+
+          # Рисуем рамку и подпись
+          draw.rectangle([x0, y0, x1, y1], outline="#00FF00", width=4)
+          draw.text((x0 + 6, y0 + 6), f"{label} ({int(conf*100)}%)", fill="#00FF00")
+
+        # Показываем фото с нарисованными рамками
+        st.image(
+            draw_img,
+            caption="Detekované přepravky (výsledek)",
+            use_container_width=True,
+        )
+
         classes = [
             p.get("class", "unknown") for p in boxes if isinstance(p, dict)
         ]
