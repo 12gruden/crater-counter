@@ -15,7 +15,7 @@ def load_model():
     
     rf = Roboflow(api_key="PP79RD363i1TjHyPScet") 
     project = rf.workspace("evgeniya-kurbatova").project("cbl_crates")
-    return project.version(3).model
+    return project.version(4).model
 
 try:
     model = load_model()
