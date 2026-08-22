@@ -29,9 +29,8 @@ if img_file is not None:
       with open("temp.jpg", "rb") as image_file:
         encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
 
-      # Максимальная чувствительность: confidence=1, overlap=90
-      url = "https://detect.roboflow.com/cbl_crates/4?api_key=PP79RD363i1TjHyPScet&confidence=1&overlap=90"
-
+      # Сбалансированные параметры: адекватная уверенность и устранение наложений
+      url = "https://detect.roboflow.com/cbl_crates/4?api_key=PP79RD363i1TjHyPScet&confidence=25&overlap=40"
       headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
       response = requests.post(url, data=encoded_string, headers=headers)
@@ -45,6 +44,7 @@ if img_file is not None:
             " za lepšího světla."
         )
       else:
+        # Честное использование классов, которые вернула модель
         classes = [
             p.get("class", "unknown") for p in boxes if isinstance(p, dict)
         ]
