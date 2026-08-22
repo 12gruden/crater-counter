@@ -18,6 +18,24 @@ if upload_option == "Vyfotit fotoaparatem":
 else:
   img_file = st.file_uploader("Nahrát obrázek", type=["jpg", "jpeg", "png"])
 
+
+# Функция для поиска предсказаний в любом месте ответа Workflow
+def extract_predictions(data):
+  preds = []
+  if isinstance(data, dict):
+    if "predictions" in data and isinstance(data["predictions"], list):
+      preds.extend(data["predictions"])
+    for k, v in data.items():
+      preds.extend(extract_predictions(v))
+  elif isinstance(data, list):
+    for item in data:
+      if isinstance(item, dict) and "class" in item:
+        preds.append(item)
+      else:
+        preds.extend(extract_predictions(item))
+  return preds
+
+
 if img_file is not None:
   try:
     # Открываем и сжимаем фото
@@ -33,31 +51,38 @@ if img_file is not None:
       with open("temp.jpg", "rb") as image_file:
         encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
 
-      # Добавили &confidence=20, чтобы снизить порог срабатывания
-      url = "https://detect.roboflow.com/cbl_crates/4?api_key=PP79RD363i1TjHyPScet&confidence=20"
+      # Правильный серверный эндпоинт для Workflow
+      url = "https://serverless.roboflow.com/infer/workflows/evgeniya-kurbatova/cbl_crates-vcblcrates-4-yolo11n-t1-logic"
 
-      headers = {"Content-Type": "application/x-www-form-urlencoded"}
+      payload = {
+          "api_key": "PP79RD363i1TjHyPScet",
+          "inputs": {"image": {"type": "base64", "value": encoded_string}},
+      }
 
-      response = requests.post(url, data=encoded_string, headers=headers)
+      # Отправляем запрос на Workflow API
+      response = requests.post(url, json=payload)
       result = response.json()
 
-      boxes = result.get("predictions", [])
+      # Извлекаем найденные объекты с помощью универсального поиска
+      valid_boxes = extract_predictions(result)
 
-      if len(boxes) == 0:
+      if len(valid_boxes) == 0:
         st.warning(
             "📦 Přepravky nebyly nalezeny. Zkuste vyfotit z bližší vzdálenosti"
             " nebo zkontrolujte osvětlení."
         )
+        # Отладочный вывод, если список всё еще пуст
+        st.write("Odpověd z workflow:", result)
       else:
         classes = [
-            p.get("class", "unknown") for p in boxes if isinstance(p, dict)
+            p.get("class", "unknown") for p in valid_boxes if isinstance(p, dict)
         ]
         counts = Counter(classes)
 
         st.subheader("Výsledek:")
         for crate_type, total in counts.items():
           st.success(f"**{crate_type}**: {total} ks")
-        st.info(f"**Celkem nalezeno**: {len(boxes)} ks")
+        st.info(f"**Celkem nalezeno**: {len(valid_boxes)} ks")
 
   except Exception as e:
     st.error(f"⚠️ Došlo k chybě při zpracování: {repr(e)}")
