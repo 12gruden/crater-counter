@@ -20,9 +20,8 @@ else:
 
 if img_file is not None:
   try:
-    # Открываем и сжимаем фото
+    # Открываем фото в максимальном качестве без сильного сжатия
     img = Image.open(img_file)
-    img.thumbnail((1024, 1024))
     img.save("temp.jpg")
 
     # Показываем превью картинки
@@ -33,8 +32,8 @@ if img_file is not None:
       with open("temp.jpg", "rb") as image_file:
         encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
 
-      # Добавили overlap=10, чтобы модель видела все соприкасающиеся ящики
-      url = "https://detect.roboflow.com/cbl_crates/4?api_key=PP79RD363i1TjHyPScet&confidence=10&overlap=10"
+      # Ультра-чувствительные настройки: confidence=5, overlap=80
+      url = "https://detect.roboflow.com/cbl_crates/4?api_key=PP79RD363i1TjHyPScet&confidence=5&overlap=80"
 
       headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
@@ -46,7 +45,7 @@ if img_file is not None:
       if len(boxes) == 0:
         st.warning(
             "📦 Přepravky nebyly nalezeny. Zkuste vyfotit z bližší vzdálenosti"
-            " nebo zkontrolujte osvětlení."
+            " za lepšího světla."
         )
       else:
         classes = [
