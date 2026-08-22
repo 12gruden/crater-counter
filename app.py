@@ -18,23 +18,6 @@ if upload_option == "Vyfotit fotoaparatem":
 else:
   img_file = st.file_uploader("Nahrát obrázek", type=["jpg", "jpeg", "png"])
 
-
-def extract_predictions(data):
-  preds = []
-  if isinstance(data, dict):
-    if "predictions" in data and isinstance(data["predictions"], list):
-      preds.extend(data["predictions"])
-    for k, v in data.items():
-      preds.extend(extract_predictions(v))
-  elif isinstance(data, list):
-    for item in data:
-      if isinstance(item, dict) and "class" in item:
-        preds.append(item)
-      else:
-        preds.extend(extract_predictions(item))
-  return preds
-
-
 if img_file is not None:
   try:
     # Открываем и сжимаем фото
@@ -46,41 +29,37 @@ if img_file is not None:
     st.image(img, caption="Zpracovávaná fotografie", use_container_width=True)
 
     with st.spinner("Počítám přepravky..."):
+      # Кодируем картинку в base64
       with open("temp.jpg", "rb") as image_file:
         encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
 
-      payload = {
-          "api_key": "PP79RD363i1TjHyPScet",
-          "inputs": {"image": {"type": "base64", "value": encoded_string}},
-      }
+      # Правильный эндпоинт для модели cbl_crates, версия 4
+      url = "https://detect.roboflow.com/cbl_crates/4?api_key=PP79RD363i1TjHyPScet"
 
-      # Запрос к Workflow API
-      response = requests.post(
-          "https://detect.roboflow.com/infer/workflows/evgeniya-kurbatova/cbl_crates-vcblcrates-4-yolo11n-t1-logic",
-          json=payload,
-      )
+      # Отправляем запрос
+      response = requests.post(url, data=encoded_string)
       result = response.json()
 
-      # ВЫВОДИМ ОТВЕТ ОТ СЕРВЕРА ДЛЯ АНАЛИЗА
-      st.write("🔍 Сырой ответ от Roboflow:", result)
+      # Извлекаем предсказания модели
+      boxes = result.get("predictions", [])
 
-      valid_boxes = extract_predictions(result)
-
-      if len(valid_boxes) == 0:
+      if len(boxes) == 0:
         st.warning(
             "📦 Přepravky nebyly nalezeny. Zkuste vyfotit z bližší vzdálenosti"
             " nebo zkontrolujte osvětlení."
         )
+        # На всякий случай выведем ответ для отладки, если ящики всё еще 0
+        st.write("Odpověd modelu:", result)
       else:
         classes = [
-            p.get("class", "unknown") for p in valid_boxes if isinstance(p, dict)
+            p.get("class", "unknown") for p in boxes if isinstance(p, dict)
         ]
         counts = Counter(classes)
 
         st.subheader("Výsledek:")
         for crate_type, total in counts.items():
           st.success(f"**{crate_type}**: {total} ks")
-        st.info(f"**Celkem nalezeno**: {len(valid_boxes)} ks")
+        st.info(f"**Celkem nalezeno**: {len(boxes)} ks")
 
   except Exception as e:
     st.error(f"⚠️ Došlo k chybě při zpracování: {repr(e)}")
