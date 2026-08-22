@@ -1,5 +1,5 @@
 ﻿import streamlit as st
-from inference_sdk import InferenceHTTPClient
+from roboflow import Roboflow
 from collections import Counter
 from PIL import Image
 
@@ -7,59 +7,41 @@ from PIL import Image
 st.set_page_config(page_title="Skener přepravek", layout="centered")
 st.title("📦 Skener přepravek")
 
-# Инициализация клиента Roboflow Workflow
+# Загрузка 4-й версии модели из Roboflow (теперь она задеплоена!)
 @st.cache_resource
-def get_workflow_client():
-    return InferenceHTTPClient(
-        api_url="https://serverless.roboflow.com",
-        api_key="PP79RD363i1TjHyPScet"
-    )
+def load_model():
+    rf = Roboflow(api_key="PP79RD363i1TjHyPScet")
+    project = rf.workspace("evgeniya-kurbatova").project("cbl_crates")
+    return project.version(4).model
 
 try:
-    client = get_workflow_client()
+    model = load_model()
 except Exception as e:
-    st.error(f"⚠️ Chyba připojení k API: {repr(e)}")
-    client = None
+    st.error(f"⚠️ Chyba připojení k modelu: {repr(e)}")
+    model = None
 
-# Кнопка для камеры телефона/ноута
+# Кнопка для камеры
 img_file = st.camera_input("Vyfotte paletu s přepravkami")
 
-if img_file and client:
+if img_file and model:
     # Сохраняем фото
     img = Image.open(img_file)
     img.save("temp.jpg")
 
     with st.spinner("Počítám přepravky..."):
         try:
-            # Запуск воркфлоу через Inference SDK
-            result = client.run_workflow(
-                workspace_name="evgeniya-kurbatova",
-                workflow_id="cbl_crates-vcblcrates-4-yolo11n-t1-logic",
-                images={
-                    "image": "temp.jpg"
-                }
-            )
+            # Получаем результат от нейросети
+            result = model.predict("temp.jpg", confidence=40, overlap=25)
             
-            # Универсальный поиск предсказаний в ответе воркфлоу
-            boxes = []
-            if isinstance(result, list) and len(result) > 0:
-                for item in result:
-                    if isinstance(item, dict):
-                        for k, v in item.items():
-                            if isinstance(v, list) and len(v) > 0 and isinstance(v[0], dict) and "class" in v[0]:
-                                boxes = v
-                                break
-                            elif isinstance(v, dict) and "predictions" in v:
-                                boxes = v["predictions"]
-                                break
-            elif isinstance(result, dict):
-                boxes = result.get("predictions", [])
-
-            # Вывод результатов на чешском языке
+            # Безопасное извлечение данных
+            data = result.json() if hasattr(result, "json") else result
+            boxes = data.get("predictions", []) if isinstance(data, dict) else []
+            
+            # Вывод результатов на чешском
             if len(boxes) == 0:
                 st.warning("📦 Přepravky nebyly nalezeny. Zkuste vyfotit z bližší vzdálenosti.")
             else:
-                classes = [p.get("class", "unknown") for p in boxes if isinstance(p, dict)]
+                classes = [p["class"] for p in boxes if "class" in p]
                 counts = Counter(classes)
                 
                 st.subheader("Výsledek:")
