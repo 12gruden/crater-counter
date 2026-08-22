@@ -7,7 +7,7 @@ import streamlit as st
 st.set_page_config(page_title="Skener přepravek", layout="centered")
 st.title("📦 Skener přepravek")
 
-# Выбор способа (камера или загрузка файла)
+# Выбор способа загрузки
 upload_option = st.radio(
     "Vyberte způsob:", ["Vyfotit fotoaparatem", "Nahrát fotku ze zařízení"]
 )
@@ -18,17 +18,23 @@ if upload_option == "Vyfotit fotoaparatem":
 else:
   img_file = st.file_uploader("Nahrát obrázek", type=["jpg", "jpeg", "png"])
 
+# Палитра контрастных цветов для 5+ видов ящиков
+COLORS = ["#00FF00", "#FF3333", "#00BFFF", "#FFFF00", "#FF00FF", "#FFA500"]
+
 if img_file is not None:
   try:
     img = Image.open(img_file)
+    
+    # Оптимизируем размер фото для быстрой отправки без потери качества
+    img.thumbnail((1500, 1500))
     img.save("temp.jpg")
 
     with st.spinner("Počítám přepravky..."):
       with open("temp.jpg", "rb") as image_file:
         encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
 
-      # Универсальные рабочие параметры
-      url = "https://detect.roboflow.com/cbl_crates/4?api_key=PP79RD363i1TjHyPScet&confidence=40&overlap=30"
+      # Оптимальные параметры детекции: отсекаем мусор (40%), не склеиваем ряды (50%)
+      url = "https://detect.roboflow.com/cbl_crates/4?api_key=PP79RD363i1TjHyPScet&confidence=40&overlap=50"
       headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
       response = requests.post(url, data=encoded_string, headers=headers)
@@ -37,51 +43,58 @@ if img_file is not None:
       boxes = result.get("predictions", [])
 
       if len(boxes) == 0:
-        st.image(
-            img, caption="Zpracovávaná fotografie", use_container_width=True
-        )
+        st.image(img, caption="Zpracovávaná fotografie", use_container_width=True)
         st.warning(
-            "📦 Přepravky nebyly nalezeny. Zkuste vyfotit z bližší vzdálenosti"
-            " za lepšího světla."
+            "📦 Přepravky nebyly nalezeny. Zkuste vyfotit z bližší vzdálenosti za lepšího světla."
         )
       else:
-        # Создаем копию картинки для отрисовки рамок
         draw_img = img.copy()
         draw = ImageDraw.Draw(draw_img)
 
+        # Распределяем цвета для найденных классов
+        class_colors = {}
+        color_idx = 0
         for box in boxes:
-          x = box["x"]
-          y = box["y"]
-          w = box["width"]
-          h = box["height"]
+          label = box["class"]
+          if label not in class_colors:
+            class_colors[label] = COLORS[color_idx % len(COLORS)]
+            color_idx += 1
+
+        # Адаптивная толщина рамки в зависимости от размера фото
+        line_width = max(2, int(img.width * 0.005))
+
+        # Отрисовка рамок и подписей
+        for box in boxes:
+          x, y, w, h = box["x"], box["y"], box["width"], box["height"]
           label = box["class"]
           conf = box.get("confidence", 0)
+          color = class_colors[label]
 
-          # Переводим координаты центра в углы рамки
-          x0 = x - w / 2
-          y0 = y - h / 2
-          x1 = x + w / 2
-          y1 = y + h / 2
+          x0, y0 = x - w / 2, y - h / 2
+          x1, y1 = x + w / 2, y + h / 2
 
-          # Рисуем рамку и подпись
-          draw.rectangle([x0, y0, x1, y1], outline="#00FF00", width=4)
-          draw.text((x0 + 6, y0 + 6), f"{label} ({int(conf*100)}%)", fill="#00FF00")
+          draw.rectangle([x0, y0, x1, y1], outline=color, width=line_width)
+          draw.text((x0 + 6, y0 + 6), f"{label} ({int(conf*100)}%)", fill=color)
 
-        # Показываем фото с нарисованными рамками
         st.image(
             draw_img,
             caption="Detekované přepravky (výsledek)",
             use_container_width=True,
         )
 
-        classes = [
-            p.get("class", "unknown") for p in boxes if isinstance(p, dict)
-        ]
+        classes = [p.get("class", "unknown") for p in boxes if isinstance(p, dict)]
         counts = Counter(classes)
 
         st.subheader("Výsledek:")
+        
+        # Вывод статистики с цветными маркерами
         for crate_type, total in counts.items():
-          st.success(f"**{crate_type}**: {total} ks")
+          color_hex = class_colors.get(crate_type, "#00FF00")
+          st.markdown(
+              f"<h4><span style='color:{color_hex}'>■</span> {crate_type}: {total} ks</h4>",
+              unsafe_allow_html=True
+          )
+          
         st.info(f"**Celkem nalezeno**: {len(boxes)} ks")
 
   except Exception as e:
