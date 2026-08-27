@@ -37,7 +37,7 @@ if img_file is not None:
         with st.spinner("Počítám přepravky..."):
             
             # VERZE 5 - Optimalizované parametry
-            url = "https://detect.roboflow.com/cbl_crates/6?api_key=PP79RD363i1TjHyPScet&confidence=40&overlap=50"
+            url = "https://detect.roboflow.com/cbl_crates/7?api_key=PP79RD363i1TjHyPScet&confidence=40&overlap=50"
             headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
             response = requests.post(url, data=base64_encoded, headers=headers)
