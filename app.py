@@ -8,28 +8,24 @@ from roboflow import Roboflow
 # 1. NASTAVENÍ ROBOFLOW A NOVÉHO MODELU (v12)
 # ==========================================
 ROBOFLOW_API_KEY = os.environ.get("ROBOFLOW_API_KEY", "PP79RD363i1TjHyPScet")
-WORKSPACE_NAME = "evgeniya-kurbatova" # Opraveno na správný název workspace
+WORKSPACE_NAME = "evgeniya-kurbatova"
 PROJECT_NAME = "cbl_crates"
-MODEL_VERSION = 12 # Nový model RF-DETR Small
+MODEL_VERSION = 12
 
 st.set_page_config(page_title="Počítadlo přepravek RF-DETR", page_icon="📦", layout="wide")
 st.title("📦 Automatické počítání přepravek (RF-DETR Small)")
 
 @st.cache_resource
-def load_roboflow_model():
+def load_roboflow_version():
     rf = Roboflow(api_key=ROBOFLOW_API_KEY)
     project = rf.workspace(WORKSPACE_NAME).project(PROJECT_NAME)
-    model = project.version(MODEL_VERSION).model
-    return model
+    # Возвращаем объект версии напрямую
+    return project.version(MODEL_VERSION)
 
 # ==========================================
 # 2. OPTIMALIZACE OBRÁZKU ("EFEKT SNÍMKU OBRAZOVKY")
 # ==========================================
 def optimize_image_for_detection(image: Image.Image, max_dimension: int = 1280) -> Image.Image:
-    """
-    Zmenší rozlišení originální fotografie a zvýší ostrost hran,
-    aby model zřetelně viděl mezery a spoje mezi přepravkami.
-    """
     if image.mode != "RGB":
         image = image.convert("RGB")
     
@@ -45,7 +41,6 @@ def optimize_image_for_detection(image: Image.Image, max_dimension: int = 1280) 
         image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
     
     image = image.filter(ImageFilter.UnsharpMask(radius=1.5, percent=120, threshold=3))
-    
     enhancer = ImageEnhance.Contrast(image)
     image = enhancer.enhance(1.15)
     
@@ -54,8 +49,6 @@ def optimize_image_for_detection(image: Image.Image, max_dimension: int = 1280) 
 # ==========================================
 # 3. ROZHRANÍ A LOGIKA
 # ==========================================
-
-# Выбор способа получения фото: Загрузить или Снять на камеру
 input_method = st.radio(
     "Vyberte způsob vložení obrázku:",
     ("Nahrát soubor", "Použít fotoaparát"),
@@ -69,8 +62,8 @@ if input_method == "Nahrát soubor":
 else:
     uploaded_file = st.camera_input("Pořiďte snímek palety")
 
-confidence_threshold = st.sidebar.slider("Páh spolehlivosti (Confidence)", 10, 90, 30, 5) / 100.0
-overlap_threshold = st.sidebar.slider("Páh překrytí (Overlap)", 10, 90, 30, 5) / 100.0
+confidence_threshold = st.sidebar.slider("Prah spolehlivosti (Confidence)", 10, 90, 30, 5) / 100.0
+overlap_threshold = st.sidebar.slider("Prah překrytí (Overlap)", 10, 90, 30, 5) / 100.0
 
 if uploaded_file is not None:
     raw_image = Image.open(uploaded_file)
@@ -87,14 +80,19 @@ if uploaded_file is not None:
         st.subheader("Výsledek detekce")
         with st.spinner("Analýza novým modelem RF-DETR..."):
             try:
-                model = load_roboflow_model()
+                version = load_roboflow_version()
                 
                 temp_path = "temp_optimized.jpg"
                 processed_image.save(temp_path, quality=95)
                 
-                prediction = model.predict(
+                # Вызов predict напрямую от версии
+                prediction = version.model.predict(
                     temp_path, 
                     confidence=int(confidence_threshold * 100), 
+                    overlap=int(overlap_threshold * 100)
+                ) if version.model else version.predict(
+                    temp_path,
+                    confidence=int(confidence_threshold * 100),
                     overlap=int(overlap_threshold * 100)
                 )
                 
