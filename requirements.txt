@@ -1,3 +1,4 @@
 streamlit
 roboflow
+inference-sdk
 pillow
