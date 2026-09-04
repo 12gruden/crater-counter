@@ -8,11 +8,11 @@ from roboflow import Roboflow
 # 1. NASTAVENÍ ROBOFLOW A NOVÉHO MODELU (v12)
 # ==========================================
 ROBOFLOW_API_KEY = os.environ.get("ROBOFLOW_API_KEY", "TVŮJ_API_KEY_ZDE")
-WORKSPACE_NAME = "12gruden"
+WORKSPACE_NAME = "evgeniya-kurbatova" # Opraveno na správný název workspace
 PROJECT_NAME = "cbl_crates"
-MODEL_VERSION = 12 # Použití nového modelu RF-DETR Small (Verze 12)
+MODEL_VERSION = 12 # Nový model RF-DETR Small
 
-st.set_page_config(page_title="Počítadlo přravek RF-DETR", page_icon="📦", layout="wide")
+st.set_page_config(page_title="Počítadlo přepravek RF-DETR", page_icon="📦", layout="wide")
 st.title("📦 Automatické počítání přepravek (RF-DETR Small)")
 
 @st.cache_resource
@@ -54,7 +54,20 @@ def optimize_image_for_detection(image: Image.Image, max_dimension: int = 1280) 
 # ==========================================
 # 3. ROZHRANÍ A LOGIKA
 # ==========================================
-uploaded_file = st.file_uploader("Nahrajte fotografii palety s přepravkami", type=["jpg", "jpeg", "png", "webp"])
+
+# Выбор способа получения фото: Загрузить или Снять на камеру
+input_method = st.radio(
+    "Vyberte způsob vložení obrázku:",
+    ("Nahrát soubor", "Použít fotoaparát"),
+    horizontal=True
+)
+
+uploaded_file = None
+
+if input_method == "Nahrát soubor":
+    uploaded_file = st.file_uploader("Nahrajte fotografii palety s přepravkami", type=["jpg", "jpeg", "png", "webp"])
+else:
+    uploaded_file = st.camera_input("Pořiďte snímek palety")
 
 confidence_threshold = st.sidebar.slider("Páh spolehlivosti (Confidence)", 10, 90, 30, 5) / 100.0
 overlap_threshold = st.sidebar.slider("Páh překrytí (Overlap)", 10, 90, 30, 5) / 100.0
@@ -74,10 +87,6 @@ if uploaded_file is not None:
         st.subheader("Výsledek detekce")
         with st.spinner("Analýza novým modelem RF-DETR..."):
             try:
-                img_byte_arr = io.BytesIO()
-                processed_image.save(img_byte_arr, format='JPEG', quality=95)
-                img_byte_arr.seek(0)
-                
                 model = load_roboflow_model()
                 
                 temp_path = "temp_optimized.jpg"
