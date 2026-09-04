@@ -1,9 +1,9 @@
 import os
 import io
+import base64
 import requests
 import streamlit as st
-from PIL import Image, ImageEnhance, ImageFilter, ImageDraw
-from roboflow import Roboflow
+from PIL import Image, ImageEnhance, ImageFilter, ImageDraw, ImageFont
 
 # ==========================================
 # 1. NASTAVENÍ ROBOFLOW A NOVÉHO MODELU (v12)
@@ -15,6 +15,15 @@ MODEL_VERSION = 12
 
 st.set_page_config(page_title="Počítadlo přepravek RF-DETR", page_icon="📦", layout="wide")
 st.title("📦 Automatické počítání přepravek (RF-DETR Small)")
+
+# Палитра цветов (RGB) для 5 видов ящиков
+COLOR_PALETTE = {
+    0: (0, 220, 100), # Зеленый
+    1: (30, 144, 255), # Ярко-синий
+    2: (255, 215, 0), # Золотисто-желтый
+    3: (255, 127, 80), # Оранжево-коралловый
+    4: (186, 85, 211), # Фиолетовый
+}
 
 # ==========================================
 # 2. OPTIMALIZACE OBRÁZKU ("EFEKT SNÍMKU OBRAZOVKY")
@@ -73,37 +82,71 @@ if uploaded_file is not None:
         st.subheader("Výsledek detekce")
         with st.spinner("Analýza novým modelem RF-DETR..."):
             try:
-                # Сохраняем оптимизированное фото в байты
+                # 1. Буферизация и base64 кодирование
                 buffer = io.BytesIO()
                 processed_image.save(buffer, format="JPEG", quality=95)
-                img_bytes = buffer.getvalue()
+                img_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
                 
-                # Прямой HTTP-запрос к API Roboflow (Serverless Inference)
+                # 2. Запрос к Roboflow API
                 api_url = f"https://detect.roboflow.com/{PROJECT_NAME}/{MODEL_VERSION}?api_key={ROBOFLOW_API_KEY}&confidence={int(confidence_threshold * 100)}"
                 
                 response = requests.post(
                     api_url,
-                    data=img_bytes,
+                    data=img_base64,
                     headers={"Content-Type": "application/x-www-form-urlencoded"}
                 )
                 
                 if response.status_code == 200:
                     predictions = response.json().get("predictions", [])
                     
-                    # Отрисовка рамок поверх оптимизированного фото
                     draw_img = processed_image.copy()
                     draw = ImageDraw.Draw(draw_img)
                     
+                    # Разделение по типам (классам)
+                    class_counts = {}
+                    class_color_map = {}
+                    known_classes = []
+                    
                     for p in predictions:
+                        class_name = p.get("class", "Crate")
+                        if class_name not in known_classes:
+                            known_classes.append(class_name)
+                        
+                        class_idx = known_classes.index(class_name)
+                        color = COLOR_PALETTE.get(class_idx % len(COLOR_PALETTE), (255, 0, 0))
+                        class_color_map[class_name] = color
+                        
+                        # Подсчет количества каждого вида
+                        class_counts[class_name] = class_counts.get(class_name, 0) + 1
+                        
+                        # Координаты рамки
                         x, y, w, h = p['x'], p['y'], p['width'], p['height']
                         left = x - w / 2
                         top = y - h / 2
                         right = x + w / 2
                         bottom = y + h / 2
-                        draw.rectangle([left, top, right, bottom], outline="red", width=3)
+                        
+                        # Рисуем контур
+                        draw.rectangle([left, top, right, bottom], outline=color, width=3)
+                        
+                        # Рисуем маленькую плашку с именем класса сверху
+                        text_box_height = 14
+                        draw.rectangle([left, max(0, top - text_box_height), left + len(class_name) * 8 + 6, top], fill=color)
+                        draw.text((left + 3, max(0, top - text_box_height) + 1), class_name, fill=(255, 255, 255))
                     
                     st.image(draw_img, use_container_width=True)
-                    st.success(f"🎉 Spočítáno přepravek: **{len(predictions)}**")
+                    st.success(f"🎉 Celkem spočítáno přepravek: **{len(predictions)}**")
+                    
+                    # Вывод подробной детализации по типам ящиков
+                    if class_counts:
+                        st.markdown("### 📊 Detail podle typů přepravek:")
+                        for c_name, count in class_counts.items():
+                            rgb = class_color_map[c_name]
+                            hex_color = f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
+                            st.markdown(
+                                f"<span style='color:{hex_color}; font-weight:bold;'>■ {c_name}:</span> **{count} ks**", 
+                                unsafe_allow_html=True
+                            )
                 else:
                     st.error(f"Chyba API Roboflow ({response.status_code}): {response.text}")
                     
