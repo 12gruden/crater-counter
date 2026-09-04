@@ -7,7 +7,7 @@ from roboflow import Roboflow
 # ==========================================
 # 1. NASTAVENÍ ROBOFLOW A NOVÉHO MODELU (v12)
 # ==========================================
-ROBOFLOW_API_KEY = os.environ.get("ROBOFLOW_API_KEY", "TVŮJ_API_KEY_ZDE")
+ROBOFLOW_API_KEY = os.environ.get("ROBOFLOW_API_KEY", "PP79RD363i1TjHyPScet")
 WORKSPACE_NAME = "evgeniya-kurbatova" # Opraveno na správný název workspace
 PROJECT_NAME = "cbl_crates"
 MODEL_VERSION = 12 # Nový model RF-DETR Small
