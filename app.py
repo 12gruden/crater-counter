@@ -1,22 +1,24 @@
 import os
 import io
 import streamlit as st
-from PIL import Image, ImageEnhance, ImageFilter
-from inference_sdk import InferenceHTTPClient
+from PIL import Image, ImageEnhance, ImageFilter, ImageDraw
+from roboflow import Roboflow
 
 # ==========================================
 # 1. NASTAVENÍ ROBOFLOW A NOVÉHO MODELU (v12)
 # ==========================================
 ROBOFLOW_API_KEY = os.environ.get("ROBOFLOW_API_KEY", "PP79RD363i1TjHyPScet")
-MODEL_ID = "cbl_crates/12" # Проект и версия 12 (RF-DETR Small)
+WORKSPACE_NAME = "evgeniya-kurbatova"
+PROJECT_NAME = "cbl_crates"
+MODEL_VERSION = 12
 
 st.set_page_config(page_title="Počítadlo přepravek RF-DETR", page_icon="📦", layout="wide")
 st.title("📦 Automatické počítání přepravek (RF-DETR Small)")
 
-CLIENT = InferenceHTTPClient(
-    api_url="https://detect.roboflow.com",
-    api_key=ROBOFLOW_API_KEY
-)
+@st.cache_resource
+def load_roboflow_project():
+    rf = Roboflow(api_key=ROBOFLOW_API_KEY)
+    return rf.workspace(WORKSPACE_NAME).project(PROJECT_NAME)
 
 # ==========================================
 # 2. OPTIMALIZACE OBRÁZKU ("EFEKT SNÍMKU OBRAZOVKY")
@@ -75,32 +77,33 @@ if uploaded_file is not None:
         st.subheader("Výsledek detekce")
         with st.spinner("Analýza novým modelem RF-DETR..."):
             try:
+                project = load_roboflow_project()
+                version = project.version(MODEL_VERSION)
+                
                 temp_path = "temp_optimized.jpg"
                 processed_image.save(temp_path, quality=95)
                 
-                # Запрос к API Roboflow
-                result = CLIENT.infer(temp_path, model_id=MODEL_ID)
+                # Поддержка обертки predict для любых типов моделей SDK
+                if hasattr(version, 'model') and version.model is not None:
+                    prediction = version.model.predict(temp_path, confidence=int(confidence_threshold * 100))
+                    prediction.save("prediction.jpg")
+                    st.image("prediction.jpg", use_container_width=True)
+                    total_crates = len(prediction.json().get("predictions", []))
+                else:
+                    # Запасной вариант вызова напрямую через клиент проекта
+                    res = project.predict(temp_path, confidence=int(confidence_threshold * 100)).json()
+                    preds = res.get("predictions", [])
+                    
+                    draw_img = processed_image.copy()
+                    draw = ImageDraw.Draw(draw_img)
+                    for p in preds:
+                        x, y, w, h = p['x'], p['y'], p['width'], p['height']
+                        draw.rectangle([x - w/2, y - h/2, x + w/2, y + h/2], outline="red", width=3)
+                    
+                    st.image(draw_img, use_container_width=True)
+                    total_crates = len(preds)
                 
-                predictions = result.get("predictions", [])
-                
-                # Фильтрация по выбранному порогу уверенности
-                filtered_predictions = [p for p in predictions if p.get("confidence", 0) >= confidence_threshold]
-                
-                # Отрисовка результатов поверх фото
-                from PIL import ImageDraw, ImageFont
-                draw_img = processed_image.copy()
-                draw = ImageDraw.Draw(draw_img)
-                
-                for p in filtered_predictions:
-                    x, y, w, h = p['x'], p['y'], p['width'], p['height']
-                    left = x - w / 2
-                    top = y - h / 2
-                    right = x + w / 2
-                    bottom = y + h / 2
-                    draw.rectangle([left, top, right, bottom], outline="red", width=3)
-                
-                st.image(draw_img, use_container_width=True)
-                st.success(f"🎉 Spočítáno přepravek: **{len(filtered_predictions)}**")
+                st.success(f"🎉 Spočítáno přepravek: **{total_crates}**")
                 
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
